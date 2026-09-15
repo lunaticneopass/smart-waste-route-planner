@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trichy Smart Waste Route Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --bg:#0b1220; --panel:#151f31; --panel2:#1d2a3e; --line:#2b3a52;
+  --text:#f5f7fb; --muted:#9eabc0; --green:#20c768; --blue:#19a9e8;
+  --orange:#ff7a18; --red:#f0444f; --yellow:#f2bd19;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;height:100vh;overflow:hidden}
+.app{display:grid;grid-template-columns:390px 1fr;height:100vh}
+.sidebar{overflow-y:auto;padding:22px;background:linear-gradient(180deg,#101827,#0b1220);border-right:1px solid #263348}
+.brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.logo{width:42px;height:42px;border-radius:12px;background:#173a2a;display:grid;place-items:center;font-size:23px}
+h1{font-size:21px;margin:0 0 3px;letter-spacing:-.3px}
+.subtitle{font-size:12px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid #26344a;border-radius:14px;padding:15px;margin-bottom:14px;box-shadow:0 8px 24px #00000018}
+.card-title{display:flex;align-items:center;gap:8px;color:#55c9ff;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:13px}
+label{display:block;font-size:12px;color:#c7d0df;margin:10px 0 6px}
+input,select{width:100%;background:#0e1728;border:1px solid #30415a;color:#fff;border-radius:8px;padding:10px 11px;outline:none;font-size:13px}
+input:focus{border-color:var(--blue)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{border:0;border-radius:9px;padding:11px 12px;font-weight:800;cursor:pointer;color:white;transition:.15s}
+button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.primary{background:linear-gradient(135deg,#20c768,#11a957);width:100%;margin-top:12px}
+.secondary{background:#34455d}
+.start{background:#159edc}
+.reset{background:#34455d}
+.progress-wrap{margin-top:12px;height:7px;border-radius:10px;background:#0a1220;overflow:hidden}
+.progress{height:100%;width:0;background:linear-gradient(90deg,#19a9e8,#20c768);transition:width .4s}
+.status{font-size:11px;color:#8fa0b9;margin-top:8px;min-height:14px}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.metric{background:#0e182a;border-radius:10px;padding:12px;text-align:center}
+.metric strong{display:block;color:#42dc83;font-size:20px}
+.metric span{font-size:10px;color:#91a0b7;text-transform:uppercase;letter-spacing:.5px}
+.section-label{font-size:11px;color:#9eabc0;margin:14px 0 8px}
+.barrow{display:grid;grid-template-columns:67px 1fr 20px;align-items:center;gap:7px;margin:8px 0;font-size:11px;color:#bcc6d6}
+.bar{height:8px;background:#0c1525;border-radius:8px;overflow:hidden}
+.fill{height:100%;border-radius:8px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:#9eabc0;margin-top:11px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.stop{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid #26344a}
+.stop:last-child{border-bottom:0}
+.stop-num{width:25px;height:25px;border-radius:8px;background:#23334b;display:grid;place-items:center;font-weight:800;font-size:11px}
+.stop-main{flex:1}
+.stop-name{font-size:12px;font-weight:700}
+.stop-meta{font-size:10px;color:#8998ae;margin-top:2px}
+.badge{font-size:9px;padding:3px 6px;border-radius:20px;background:#26364c;color:#b9c7d8}
+.map-wrap{position:relative;min-width:0;min-height:0;height:100vh}
+#map{height:100%;width:100%}
+.map-overlay{position:absolute;z-index:1000;top:16px;right:16px;background:#101a2aee;border:1px solid #33445d;border-radius:12px;padding:11px 13px;backdrop-filter:blur(10px);min-width:180px}
+.map-overlay strong{font-size:12px}
+.map-overlay p{margin:5px 0 0;font-size:10px;color:#a9b5c7}
+.truck-marker,.bin-marker,.dump-marker{display:flex;align-items:center;justify-content:center;border-radius:50%;border:2px solid white;box-shadow:0 2px 8px #0007}
+.truck-marker{width:34px;height:34px;background:#159edc;font-size:17px}
+.bin-marker{width:23px;height:23px;background:var(--orange);font-size:11px}
+.dump-marker{width:28px;height:28px;background:#44536b;font-size:14px}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#121c2c;color:#fff}
+.leaflet-popup-content{font-size:12px;line-height:1.5}
+.offline-map{position:absolute;inset:0;overflow:hidden;background:
+ radial-gradient(circle at 52% 45%,#1d2b40 0,#121d2d 42%,#0d1727 100%);}
+.offline-map svg{width:100%;height:100%;display:block}
+.off-road{fill:none;stroke:#33465e;stroke-width:2}
+.off-road.main{stroke:#52657c;stroke-width:4}
+.off-river{fill:none;stroke:#234b67;stroke-width:28;opacity:.75}
+.off-label{fill:#9baabd;font-size:12px;font-family:Segoe UI,Arial,sans-serif}
+.stop-why{font-size:10px;color:#7fb6d8;margin-top:2px}.off-title{fill:#dfe7f2;font-size:16px;font-weight:800;font-family:Segoe UI,Arial,sans-serif}
+.off-marker{cursor:pointer;filter:drop-shadow(0 2px 3px #0008)}
+.off-legend{position:absolute;bottom:18px;left:18px;background:#101a2be8;border:1px solid #33445d;border-radius:10px;padding:9px 11px;color:#b7c4d6;font:11px Segoe UI,Arial;z-index:3}
+.off-route{fill:none;stroke:#19a9e8;stroke-width:5;stroke-dasharray:10 8;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+
+@media(max-width:800px){
+ body{overflow:auto}.app{display:block;height:auto}.sidebar{height:auto}.map-wrap{height:60vh;min-height:420px}
+}
+
+.team-credits{
+  margin-top:7px;
+  font-size:10px;
+  line-height:1.55;
+  color:#91a4bd;
+  letter-spacing:.1px;
+}
+.team-credits b{color:#dce8f6}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">
+    <div class="logo">♻️</div>
+    <div><h1>Trichy Smart Waste</h1><div class="subtitle">Demand-driven collection route planner</div>
+<div class="team-credits">
+  <div><b>Advaith Ajith</b> · 24BCE5129</div>
+  <div><b>Priyessh Kumar</b> · 24BCE5273</div>
+</div>
+</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🚛 Truck settings</div>
+    <div class="row">
+      <div><label>Truck capacity (kg)</label><input id="capacity" type="number" min="100" value="1500"></div>
+      <div><label>Starting load (kg)</label><input id="startLoad" type="number" min="0" value="0"></div>
+    </div>
+    <label>Collect bins with fill ≥ <b id="thresholdValue">80</b>%</label>
+    <input id="threshold" type="range" min="50" max="95" value="80" oninput="thresholdValue.textContent=this.value">
+    <button class="primary" onclick="generateRoute()">🤖 Generate Smart Route</button>
+    <div class="row" style="margin-top:8px">
+      <button class="start" onclick="startTruck()">▶ Start Truck</button>
+      <button class="reset" onclick="resetApp()">↻ Reset</button>
+    </div>
+    <div class="progress-wrap"><div class="progress" id="progress"></div></div>
+    <div class="status" id="status">Truck idle at depot · Generate a route to begin.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 Live dashboard</div>
+    <div class="metrics">
+      <div class="metric"><strong id="mBins">0</strong><span>Bins selected</span></div>
+      <div class="metric"><strong id="mDistance">0.0</strong><span>Route km</span></div>
+      <div class="metric"><strong id="mWeight">0</strong><span>Planned kg</span></div>
+      <div class="metric"><strong id="mFuel">0</strong><span>Fuel impact</span></div>
+    </div>
+    <div class="status">Fuel impact: longer distance + heavier load = higher estimated fuel use.</div>
+
+    <div class="section-label">Fill-level distribution</div>
+    <div id="fillBars"></div>
+
+    <div class="section-label">Bins by category</div>
+    <div id="catBars"></div>
+
+    <div class="legend">
+      <span><i class="dot" style="background:#20c768"></i>Normal</span>
+      <span><i class="dot" style="background:#ffb800"></i>Priority</span>
+      <span><i class="dot" style="background:#ff7a18"></i>High fill</span>
+      <span><i class="dot" style="background:#f0444f"></i>Critical</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧠 Why this route?</div>
+    <div id="decisionBox" class="status">Generate a route to see the selection logic.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📍 Optimized route</div>
+    <div class="status" style="margin-top:-7px;margin-bottom:5px">Priority order: <b>Hospital &gt; Complaint &gt; Market &gt; Normal</b><br>Rule: eligible bins → priority category first → nearest within that category → capacity check.</div>
+    <div id="stops"><div class="status">No route generated yet.</div></div>
+  </div>
+</aside>
+
+<main class="map-wrap">
+  <div id="map"></div>
+  <div class="map-overlay">
+    <strong>TRICHY COLLECTION NETWORK</strong>
+    <p id="mapStatus">Select a threshold and generate the route.</p>
+  </div>
+</main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const depot=[10.7905,78.7047];
+const disposalSites=[
+  {name:"Ariyamangalam Disposal Site",lat:10.7998,lng:78.7145}
+];
+
+// Simulated v1 data — no login, backend or API key required.
+const bins=[
+ {name:"Srirangam Market",lat:10.8627,lng:78.6980,fill:96,cat:"market",kg:210},
+ {name:"Srirangam Hospital",lat:10.8590,lng:78.6920,fill:91,cat:"hospital",kg:180},
+ {name:"Thillai Nagar Market",lat:10.8122,lng:78.6900,fill:88,cat:"market",kg:160},
+ {name:"Central Bus Stand",lat:10.8014,lng:78.6855,fill:84,cat:"normal",kg:130},
+ {name:"Woraiyur Hospital",lat:10.8238,lng:78.6788,fill:93,cat:"hospital",kg:175},
+ {name:"Puthur Market",lat:10.8180,lng:78.6938,fill:87,cat:"market",kg:155},
+ {name:"Complaint · Cantonment",lat:10.7950,lng:78.6850,fill:86,cat:"complaint",kg:125},
+ {name:"KK Nagar",lat:10.7802,lng:78.6990,fill:82,cat:"normal",kg:120},
+ {name:"Airport Road",lat:10.7660,lng:78.7090,fill:78,cat:"normal",kg:110},
+ {name:"Ponmalaipatti",lat:10.7800,lng:78.7220,fill:74,cat:"normal",kg:100},
+ {name:"Ariyamangalam Ward",lat:10.7920,lng:78.7180,fill:90,cat:"complaint",kg:140},
+ {name:"Golden Rock",lat:10.7750,lng:78.7280,fill:81,cat:"normal",kg:115},
+ {name:"Samayapuram Road",lat:10.8450,lng:78.7350,fill:69,cat:"normal",kg:90},
+ {name:"Manachanallur",lat:10.9500,lng:78.7550,fill:62,cat:"normal",kg:80},
+ {name:"Edamalaipatti",lat:10.7580,lng:78.7050,fill:52,cat:"normal",kg:65},
+ {name:"Market Road",lat:10.8050,lng:78.7070,fill:95,cat:"market",kg:190},
+ {name:"Medical College Area",lat:10.8160,lng:78.7260,fill:89,cat:"hospital",kg:165},
+ {name:"Woraiyur Complaint",lat:10.8280,lng:78.6750,fill:92,cat:"complaint",kg:150},
+ {name:"Chathiram",lat:10.8320,lng:78.6900,fill:83,cat:"normal",kg:115},
+ {name:"Thiruvanaikoil",lat:10.8530,lng:78.7040,fill:86,cat:"normal",kg:120}
+];
+
+const isLocalFile = location.protocol === 'file:';
+let leafletMode = (typeof L !== 'undefined') && !isLocalFile;
+let map = null;
+let binLayers=[], routeLayer=null, truckLayer=null, route=[], timer=null, routeIndex=0;
+let offlineMarkers=[], offlineRoute=null;
+
+if(leafletMode){
+  map=L.map('map').setView([10.81,78.70],12.5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap contributors',maxZoom:19
+  }).addTo(map);
+}else{
+  createOfflineMap();
+}
+
+function icon(cls,emoji){
+  return L.divIcon({className:'',html:`<div class="${cls}">${emoji}</div>`,iconSize:null,iconAnchor:[12,12]})
+}
+function markerColor(fill){return fill>=90?'#f0444f':fill>=80?'#ff7a18':fill>=50?'#f2bd19':'#20c768'}
+
+function project(lat,lng){
+  const minLat=10.735,maxLat=10.875,minLng=78.65,maxLng=78.755;
+  const x=(lng-minLng)/(maxLng-minLng)*100;
+  const y=(1-(lat-minLat)/(maxLat-minLat))*100;
+  return [x,y];
+}
+function createOfflineMap(){
+  const el=document.getElementById('map');
+  el.innerHTML=`<div class="offline-map" id="offlineMap">
+    <svg viewBox="0 0 1000 700" preserveAspectRatio="none">
+      <path class="off-river" d="M-30 170 C180 250 300 120 470 210 S760 390 1030 260"/>
+      <path class="off-road main" d="M70 620 C220 510 250 400 390 350 S650 260 930 70"/>
+      <path class="off-road main" d="M80 120 C250 200 360 270 490 340 S760 510 980 600"/>
+      <path class="off-road" d="M180 20 L330 680"/>
+      <path class="off-road" d="M470 0 C430 180 520 300 470 700"/>
+      <path class="off-road" d="M700 0 C630 190 710 330 650 700"/>
+      <path class="off-road" d="M0 330 C250 300 430 350 1000 330"/>
+      <path class="off-road" d="M0 480 C260 440 510 500 1000 470"/>
+      <text x="430" y="330" class="off-title">TIRUCHIRAPPALLI</text>
+      <text x="425" y="355" class="off-label">Smart Waste Collection Network</text>
+      <text x="65" y="155" class="off-label">Srirangam</text>
+      <text x="720" y="110" class="off-label">Thiruverumbur</text>
+      <text x="735" y="575" class="off-label">Airport</text>
+      <text x="760" y="270" class="off-label">Ariyamangalam</text>
+      <text x="120" y="530" class="off-label">Woraiyur</text>
+    </svg>
+    <div class="off-legend">Trichy network · route and bin data for demonstration</div>
+  </div>`;
+}
+
+function offlineMarker(lat,lng,html,title){
+  const [x,y]=project(lat,lng);
+  const m=document.createElement('div');
+  m.className='off-marker';
+  m.style.cssText=`position:absolute;left:${x}%;top:${y}%;transform:translate(-50%,-50%);z-index:2`;
+  m.innerHTML=html;
+  m.title=title;
+  m.onclick=()=>alert(title);
+  document.getElementById('offlineMap').appendChild(m);
+  offlineMarkers.push(m);
+  return m;
+}
+
+function renderBins(){
+  if(leafletMode){
+    binLayers.forEach(x=>map.removeLayer(x)); binLayers=[];
+    bins.forEach(b=>{
+      const el=L.divIcon({className:'',html:`<div class="bin-marker" style="background:${markerColor(b.fill)}">🗑️</div>`,iconAnchor:[11,11]});
+      const m=L.marker([b.lat,b.lng],{icon:el}).addTo(map);
+      m.bindPopup(`<b>${b.name}</b><br>Fill: <b>${b.fill}%</b><br>Category: ${b.cat}<br>Estimated load: ${b.kg} kg`);
+      binLayers.push(m);
+    });
+    const d=L.marker(depot,{icon:icon('truck-marker','🏠')}).addTo(map).bindPopup("<b>Collection Depot</b><br>Truck starting point");
+    binLayers.push(d);
+    disposalSites.forEach(s=>{
+      const m=L.marker([s.lat,s.lng],{icon:icon('dump-marker','🏭')}).addTo(map).bindPopup(`<b>${s.name}</b><br>Valid disposal destination`);
+      binLayers.push(m);
+    });
+  }else{
+    offlineMarkers.forEach(m=>m.remove()); offlineMarkers=[];
+    bins.forEach(b=>{
+      const color=markerColor(b.fill);
+      offlineMarker(b.lat,b.lng,`<div style="width:22px;height:22px;border-radius:50%;background:${color};border:2px solid white;display:grid;place-items:center;font-size:10px">🗑️</div>`,
+        `${b.name} · ${b.fill}% full · ${b.cat} · ${b.kg} kg`);
+    });
+    offlineMarker(depot[0],depot[1],`<div style="width:32px;height:32px;border-radius:50%;background:#159edc;border:2px solid white;display:grid;place-items:center;font-size:16px">🏠</div>`,"Collection Depot");
+    disposalSites.forEach(s=>offlineMarker(s.lat,s.lng,`<div style="width:28px;height:28px;border-radius:50%;background:#44536b;border:2px solid white;display:grid;place-items:center;font-size:14px">🏭</div>`,s.name));
+  }
+}
+renderBins();
+
+function fixMapSize(){
+  if(leafletMode){
+    setTimeout(()=>map.invalidateSize(true),50);
+    setTimeout(()=>map.invalidateSize(true),300);
+    setTimeout(()=>map.invalidateSize(true),1000);
+  }
+}
+window.addEventListener('load',fixMapSize);
+window.addEventListener('resize',fixMapSize);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)fixMapSize();});
+if(window.ResizeObserver) new ResizeObserver(fixMapSize).observe(document.getElementById('map'));
+
+function hav(a,b){
+ const R=6371, p=Math.PI/180;
+ const alat=Array.isArray(a)?a[0]:a.lat, alng=Array.isArray(a)?a[1]:a.lng;
+ const blat=Array.isArray(b)?b[0]:b.lat, blng=Array.isArray(b)?b[1]:b.lng;
+ const dLat=(blat-alat)*p,dLon=(blng-alng)*p;
+ const x=Math.sin(dLat/2)**2+Math.cos(alat*p)*Math.cos(blat*p)*Math.sin(dLon/2)**2;
+ return 2*R*Math.asin(Math.sqrt(x));
+}
+function point(x){return {lat:x.lat,lng:x.lng}}
+function priority(b){return (b.cat==='hospital'?30:0)+(b.cat==='market'?20:0)+(b.cat==='complaint'?25:0)+b.fill}
+function nearest(current, candidates){
+ let best=null,bestScore=Infinity;
+ candidates.forEach(b=>{
+   const d=hav({lat:current[0],lng:current[1]},b);
+   const score=d-(priority(b)*0.012);
+   if(score<bestScore){bestScore=score;best=b}
+ });
+ return best;
+}
+
+function generateRoute(){
+ clearInterval(timer); timer=null; routeIndex=0;
+ const threshold=+document.getElementById('threshold').value;
+ const cap=+document.getElementById('capacity').value||1500;
+ let candidates=bins.filter(b=>b.fill>=threshold);
+ route=[]; let load=+document.getElementById('startLoad').value||0;
+ let current=[depot[0],depot[1]], distance=0, disposal=0;
+
+ // Simple rule:
+ // 1) Only eligible bins (fill >= threshold).
+ // 2) Priority bins come first: hospital > complaint > market > normal.
+ // 3) Within the same priority level, choose the nearest bin.
+ // 4) Never exceed truck capacity; if needed, visit disposal first.
+ const tier=b=>b.cat==='hospital'?3:b.cat==='complaint'?2:b.cat==='market'?1:0;
+
+ while(candidates.length){
+   let feasible=candidates.filter(b=>load+b.kg<=cap);
+   if(!feasible.length){
+     const ds=disposalSites[0];
+     distance+=hav(current,ds);
+     route.push({type:'disposal',...ds});
+     disposal++; load=0; current=[ds.lat,ds.lng];
+     feasible=candidates.filter(b=>b.kg<=cap);
+     if(!feasible.length) break;
+   }
+
+   const highest=Math.max(...feasible.map(tier));
+   const samePriority=feasible.filter(b=>tier(b)===highest);
+   const next=nearestByDistance(current,samePriority);
+   next._reason = tier(next)===3 ? 'Hospital priority' : tier(next)===2 ? 'Complaint priority' : tier(next)===1 ? 'Market priority' : 'Nearest regular bin';
+
+   distance+=hav(current,next);
+   load+=next.kg;
+   current=[next.lat,next.lng];
+   route.push({type:'bin',...next});
+   candidates=candidates.filter(x=>x!==next);
+ }
+ if(route.length){
+   const last=route[route.length-1];
+   distance+=hav([last.lat,last.lng],depot);
+ }
+
+ const plannedWeight=route.filter(x=>x.type==='bin').reduce((s,x)=>s+x.kg,0);
+ // Simple load-aware indicator for the demo, not litres of fuel:
+ // each route segment is weighted by the truck's approximate current load.
+ let fuelIndex=calculateFuelImpact(route,cap);
+
+ drawRoute();
+ updateDashboard(distance,plannedWeight,disposal,threshold,fuelIndex);
+ renderStops();
+ renderSkipped(threshold);
+ updateDecisionBox();
+ document.getElementById('status').textContent=`Route ready · ${route.filter(x=>x.type==='bin').length} bins selected`;
+ document.getElementById('mapStatus').textContent=`${route.filter(x=>x.type==='bin').length} priority stops · ${distance.toFixed(1)} km planned`;
+}
+
+function nearestByDistance(current,candidates){
+ let best=null,bestDistance=Infinity;
+ candidates.forEach(b=>{
+   const d=hav(current,b);
+   if(d<bestDistance){bestDistance=d;best=b}
+ });
+ return best;
+}
+
+function calculateFuelImpact(routeItems,cap){
+ let impact=0;
+ let load=+document.getElementById('startLoad').value||0;
+ let current=[depot[0],depot[1]];
+ routeItems.forEach(item=>{
+   const d=hav(current,item);
+   const loadFactor=1+(load/Math.max(cap,1));
+   impact+=d*loadFactor;
+   if(item.type==='bin') load+=item.kg;
+   else load=0;
+   current=[item.lat,item.lng];
+ });
+ impact+=hav(current,depot)*(1+(load/Math.max(cap,1)));
+ return impact;
+}
+
+function drawRoute(){
+ if(leafletMode){
+   if(routeLayer) map.removeLayer(routeLayer);
+   const pts=[depot,...route.map(x=>[x.lat,x.lng]),depot];
+   routeLayer=L.polyline(pts,{color:'#19a9e8',weight:5,opacity:.85,dashArray:'9 8'}).addTo(map);
+   map.fitBounds(routeLayer.getBounds().pad(.12));
+ }else{
+   const old=document.getElementById('offlineRouteSvg');
+   if(old) old.remove();
+   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+   svg.id='offlineRouteSvg'; svg.setAttribute('viewBox','0 0 1000 700');
+   svg.style.cssText='position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none';
+   const pts=[depot,...route.map(x=>[x.lat,x.lng]),depot].map(p=>{
+     const q=project(p[0],p[1]); return `${q[0]*10},${q[1]*7}`;
+   }).join(' ');
+   svg.innerHTML=`<polyline class="off-route" points="${pts}"/>`;
+   document.getElementById('offlineMap').appendChild(svg);
+ }
+}
+
+function updateDashboard(distance,weight,disposal,threshold,fuelIndex){
+ document.getElementById('mBins').textContent=route.filter(x=>x.type==='bin').length;
+ document.getElementById('mDistance').textContent=distance.toFixed(1);
+ document.getElementById('mWeight').textContent=weight;
+ document.getElementById('mFuel').textContent=fuelIndex.toFixed(1);
+ renderBars(threshold);
+}
+function renderBars(threshold){
+ const groups=[
+  ['<50%',bins.filter(b=>b.fill<50).length,'#20c768'],
+  ['50–79%',bins.filter(b=>b.fill>=50&&b.fill<80).length,'#f2bd19'],
+  ['80–89%',bins.filter(b=>b.fill>=80&&b.fill<90).length,'#ff7a18'],
+  ['90–100%',bins.filter(b=>b.fill>=90).length,'#f0444f']
+ ];
+ const max=Math.max(...groups.map(x=>x[1]),1);
+ document.getElementById('fillBars').innerHTML=groups.map(x=>`<div class="barrow"><span>${x[0]}</span><div class="bar"><div class="fill" style="width:${x[1]/max*100}%;background:${x[2]}"></div></div><span>${x[1]}</span></div>`).join('');
+ const cats=['market','hospital','complaint','normal'];
+ const cc={market:'#ff7a18',hospital:'#f0444f',complaint:'#f2bd19',normal:'#20a9e8'};
+ const counts=cats.map(c=>[c,bins.filter(b=>b.cat===c).length,cc[c]]);
+ const mx=Math.max(...counts.map(x=>x[1]),1);
+ document.getElementById('catBars').innerHTML=counts.map(x=>`<div class="barrow"><span>${x[0]}</span><div class="bar"><div class="fill" style="width:${x[1]/mx*100}%;background:${x[2]}"></div></div><span>${x[1]}</span></div>`).join('');
+}
+renderBars(80);
+
+function renderStops(){
+ const el=document.getElementById('stops');
+ if(!route.length){el.innerHTML='<div class="status">No route generated yet.</div>';return}
+ el.innerHTML=route.map((s,i)=>s.type==='disposal'
+   ? `<div class="stop"><div class="stop-num">🏭</div><div class="stop-main"><div class="stop-name">${s.name}</div><div class="stop-meta">Truck capacity reached → disposal stop</div></div><span class="badge">DISPOSE</span></div>`
+   : `<div class="stop"><div class="stop-num">${i+1}</div><div class="stop-main"><div class="stop-name">${s.name}</div><div class="stop-meta">${s.fill}% full · ${s.kg} kg · ${s.cat}</div><div class="stop-why">Why: ${s._reason||whySelected(s)}</div></div><span class="badge">${['hospital','complaint','market'].includes(s.cat)?'PRIORITY':'COLLECT'}</span></div>`
+ ).join('');
+}
+
+function whySelected(b){
+ if(b.cat==='hospital') return 'Priority: hospital';
+ if(b.cat==='complaint') return 'Priority: complaint';
+ if(b.cat==='market') return 'Priority: market';
+ return 'Regular bin · nearest within current priority level';
+}
+
+function updateDecisionBox(){
+ const box=document.getElementById('decisionBox');
+ if(!box) return;
+ const first=route.find(x=>x.type==='bin');
+ if(!first){ box.textContent='No eligible bins at the selected threshold.'; return; }
+ const p=first.cat==='hospital'?'Hospital':first.cat==='complaint'?'Complaint':first.cat==='market'?'Market':'Normal';
+ box.innerHTML=`<b>First stop:</b> ${first.name}<br>
+ <b>Why:</b> ${p==='Normal'?'nearest regular eligible bin':p+' priority'} · ${first.fill}% full · ${first.kg} kg`;
+}
+
+function renderSkipped(threshold){
+ const skipped=bins.filter(b=>b.fill<threshold);
+ let box=document.getElementById('skipped');
+ if(!box){
+   box=document.createElement('div');
+   box.id='skipped';
+   box.className='card';
+   document.querySelector('.sidebar').appendChild(box);
+ }
+ box.innerHTML=`<div class="card-title">⏭️ Skipped bins</div>
+ <div class="status" style="margin-top:-5px;margin-bottom:7px">Below ${threshold}% threshold — no collection needed yet.</div>
+ ${skipped.length?skipped.map(b=>`<div class="stop"><div class="stop-num">✓</div><div class="stop-main"><div class="stop-name">${b.name}</div><div class="stop-meta">${b.fill}% full · skipped</div></div></div>`).join(''):'<div class="status">None — all bins meet the threshold.</div>'}`;
+}
+
+function startTruck(){
+ if(!route.length){generateRoute();return}
+ clearInterval(timer); routeIndex=0;
+ if(truckLayer){
+   if(leafletMode) map.removeLayer(truckLayer); else truckLayer.remove();
+ }
+ if(leafletMode){
+   truckLayer=L.marker(depot,{icon:icon('truck-marker','🚛'),zIndexOffset:1000}).addTo(map);
+ }else{
+   truckLayer=offlineMarker(depot[0],depot[1],`<div style="width:34px;height:34px;border-radius:50%;background:#159edc;border:2px solid white;display:grid;place-items:center;font-size:17px">🚛</div>`,"Truck");
+ }
+ timer=setInterval(()=>{
+   if(routeIndex>=route.length){
+     clearInterval(timer); timer=null;
+     if(leafletMode) truckLayer.setLatLng(depot);
+     else { const q=project(depot[0],depot[1]); truckLayer.style.left=q[0]+'%'; truckLayer.style.top=q[1]+'%'; }
+     document.getElementById('progress').style.width='100%';
+     document.getElementById('status').textContent='Route completed · Truck returned to depot';
+     return;
+   }
+   const s=route[routeIndex];
+   if(leafletMode) truckLayer.setLatLng([s.lat,s.lng]);
+   else {
+     const q=project(s.lat,s.lng);
+     truckLayer.style.left=q[0]+'%'; truckLayer.style.top=q[1]+'%';
+   }
+   routeIndex++;
+   document.getElementById('progress').style.width=(routeIndex/route.length*100)+'%';
+   document.getElementById('status').textContent=s.type==='disposal'
+      ? 'Truck full · Redirected to nearest disposal site'
+      : `Collecting ${s.name} · ${s.fill}% full`;
+ },900);
+}
+
+function resetApp(){
+ const db=document.getElementById('decisionBox'); if(db) db.textContent='Generate a route to see the selection logic.';
+ clearInterval(timer); timer=null; route=[];routeIndex=0;
+ if(routeLayer){
+   if(leafletMode) map.removeLayer(routeLayer);
+   else { const r=document.getElementById('offlineRouteSvg'); if(r) r.remove(); }
+   routeLayer=null;
+ }
+ if(truckLayer){
+   if(leafletMode) map.removeLayer(truckLayer); else truckLayer.remove();
+   truckLayer=null;
+ }
+ document.getElementById('progress').style.width='0';
+ document.getElementById('mBins').textContent='0';
+ document.getElementById('mDistance').textContent='0.0';
+ document.getElementById('mWeight').textContent='0';
+ document.getElementById('mFuel').textContent='0';
+ document.getElementById('status').textContent='Truck idle at depot · Generate a route to begin.';
+ document.getElementById('mapStatus').textContent='Select a threshold and generate the route.';
+ document.getElementById('stops').innerHTML='<div class="status">No route generated yet.</div>';
+ if(leafletMode) map.setView([10.81,78.70],12.5);
+}
+
+document.getElementById('threshold').addEventListener('input',()=>renderBars(+document.getElementById('threshold').value));
+</script>
+</body>
+</html>
